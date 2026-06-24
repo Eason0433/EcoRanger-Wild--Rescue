@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcoRanger: Wild Rescue — Misi SDG 15 (Hidupan di Darat)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root{ --ink:#16352a; }
+  *{ -webkit-tap-highlight-color:transparent; }
+  body{ font-family:'Plus Jakarta Sans',sans-serif; color:var(--ink); user-select:none;
+        background:radial-gradient(1200px 600px at 50% -10%, #bdf3da 0%, #d6f5e6 35%, #eafaf1 70%, #effff7 100%);
+        background-attachment:fixed; }
+  .display{ font-family:'Baloo 2',cursive; }
+  .screen{ display:none; }
+  .screen.active{ display:flex; }
+  .card{ background:rgba(255,255,255,.82); backdrop-filter:blur(12px); border:1px solid rgba(16,185,129,.18);
+         box-shadow:0 18px 40px -16px rgba(6,78,59,.35), 0 2px 6px rgba(6,78,59,.06); }
+  .btn-press{ transition:transform .08s ease, box-shadow .15s ease; }
+  .btn-press:active{ transform:translateY(2px) scale(.99); }
+  #gameCanvas{ display:block; width:100%; height:100%; }
+  .imgwrap{ position:relative; width:100%; height:100%; overflow:hidden; background:#0c2a1c; }
+  .imgwrap .imgfallback{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:5rem; }
+  .imgwrap img{ position:relative; z-index:1; width:100%; height:100%; object-fit:cover; display:block; }
+  ::-webkit-scrollbar{ width:8px; } ::-webkit-scrollbar-thumb{ background:#a7e8cf; border-radius:8px; }
+  @keyframes floaty{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-9px) } }
+  .floaty{ animation:floaty 3.4s ease-in-out infinite; }
+  @keyframes pop{ 0%{ transform:scale(.6); opacity:0 } 60%{ transform:scale(1.05) } 100%{ transform:scale(1); opacity:1 } }
+  .pop{ animation:pop .4s cubic-bezier(.2,1.3,.5,1) both; }
+  @keyframes slideDown{ from{ transform:translateY(-24px); opacity:0 } to{ transform:translateY(0); opacity:1 } }
+  .toast{ animation:slideDown .3s ease both; }
+  .ring-track{ stroke:#e6f6ee; } .ring-fill{ stroke:#10b981; stroke-linecap:round; transition:stroke-dashoffset .6s ease; }
+  .sheen{ background:linear-gradient(110deg,#10b981,#22c55e 45%,#84cc16); }
+  /* Pad gerak dalam peta */
+  .dpad{ width:3rem; height:3rem; border-radius:1rem; background:rgba(255,255,255,.78); backdrop-filter:blur(6px);
+         color:#059669; box-shadow:0 4px 12px rgba(6,78,59,.18); display:flex; align-items:center; justify-content:center; font-size:1.15rem; transition:transform .08s, background .15s; }
+  .dpad:active{ transform:scale(.92); background:#10b981; color:#fff; }
+  /* TELEFON: skrin penuh, peta isi tinggi */
+  @media (max-width:768px){
+    #screen-game.active{ position:fixed; inset:0; padding:0; z-index:30; }
+    #gameInner{ max-width:none; height:100dvh; }
+    #gameAppbar{ border-radius:0; margin:0; }
+    #mapWrap{ aspect-ratio:auto !important; flex:1 1 auto; border-radius:0 !important; }
+    .dpad{ width:3.4rem; height:3.4rem; font-size:1.3rem; }
+    #miniMap{ width:92px !important; height:66px !important; }
+  }
+  /* TABLET / iPAD */
+  @media (min-width:769px) and (max-width:1024px){
+    #gameInner{ max-width:none; }
+    #mapWrap{ aspect-ratio:16/10; }
+  }
+</style>
+  <script type="module" crossorigin src="./assets/index-DMEd0mjd.js"></script>
+</head>
+<body class="min-h-screen overflow-x-hidden">
+
+<!-- ============ TOAST LAYER ============ -->
+<div id="toastLayer" class="fixed top-3 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none w-[92%] max-w-sm"></div>
+
+<!-- ============ SKRIN: MENU UTAMA ============ -->
+<div id="screen-start" class="screen active fixed inset-0 z-40 flex-col items-center justify-center p-4 overflow-hidden">
+  <div class="absolute inset-0 -z-10" style="background:linear-gradient(#bfe9ff,#d9f7e6 52%,#bdeec6)"></div>
+  <div class="absolute top-8 right-10 text-6xl floaty">☀️</div>
+  <div class="absolute top-12 left-8 text-4xl" style="animation:floaty 5s ease-in-out infinite">☁️</div>
+  <div class="absolute top-28 left-1/3 text-3xl opacity-80" style="animation:floaty 6.5s ease-in-out infinite">☁️</div>
+  <!-- lawn bawah + haiwan comel mengintai -->
+  <div class="absolute bottom-0 left-0 right-0 h-44 -z-10" style="background:linear-gradient(#8ad994,#57b566)"></div>
+  <div class="absolute bottom-7 left-0 right-0 flex justify-around items-end text-5xl md:text-6xl pointer-events-none">
+    <span class="floaty">🐯</span><span class="floaty" style="animation-delay:.4s">🐘</span><span class="floaty" style="animation-delay:.8s">🦧</span><span class="floaty" style="animation-delay:.2s">🐼</span><span class="floaty" style="animation-delay:.6s">🐢</span><span class="floaty hidden sm:inline" style="animation-delay:1s">🦏</span>
+  </div>
+  <div class="relative text-center max-w-md w-full card p-7 rounded-[2rem] pop mb-20">
+    <div class="text-6xl mb-1 floaty">🌿🐾</div>
+    <h1 class="display text-5xl font-extrabold sheen bg-clip-text text-transparent leading-none">EcoRanger</h1>
+    <p class="display text-emerald-600 font-bold tracking-[.3em] text-sm mt-1">WILD RESCUE</p>
+    <p class="text-slate-600 text-sm mt-3 mb-5 leading-relaxed" data-i18n-html="tagline">Selamatkan haiwan & tumbuhan terancam — lindungi <b class="text-emerald-700">Hidupan di Darat (SDG 15)</b>!</p>
+    <button onclick="goHub()" data-i18n="play" class="btn-press w-full py-4 sheen text-white display font-bold rounded-2xl shadow-lg text-xl tracking-wide">▶ MULA MAIN</button>
+    <div class="grid grid-cols-4 gap-2 mt-3">
+      <button onclick="openCollection()" class="btn-press py-2.5 bg-white border border-emerald-200 text-emerald-600 font-bold rounded-2xl text-[11px]"><i class="fa-solid fa-book block text-base mb-0.5"></i><span data-i18n="btn_collection">Koleksi</span></button>
+      <button onclick="openStore()" class="btn-press py-2.5 bg-white border border-amber-200 text-amber-600 font-bold rounded-2xl text-[11px]"><i class="fa-solid fa-store block text-base mb-0.5"></i><span data-i18n="btn_store">Kedai</span></button>
+      <button onclick="openAch()" class="btn-press py-2.5 bg-white border border-sky-200 text-sky-600 font-bold rounded-2xl text-[11px]"><i class="fa-solid fa-medal block text-base mb-0.5"></i><span data-i18n="btn_ach">Pencapaian</span></button>
+      <button onclick="openHelp()" class="btn-press py-2.5 bg-white border border-slate-200 text-slate-600 font-bold rounded-2xl text-[11px]"><i class="fa-solid fa-circle-question block text-base mb-0.5"></i><span data-i18n="btn_how">Cara</span></button>
+    </div>
+    <div class="mt-4 flex items-center justify-center gap-4 text-sm">
+      <span class="flex items-center gap-1.5 font-bold text-amber-500"><i class="fa-solid fa-coins"></i> <span id="startCoins">0</span></span>
+      <span id="startRank" class="flex items-center gap-1.5 font-bold text-emerald-600">🌱 Perekrut</span>
+      <button onclick="toggleMute()" id="muteBtn" class="text-slate-400 hover:text-slate-700"><i class="fa-solid fa-volume-high"></i></button><button onclick="toggleLang()" class="ml-1 text-slate-600 hover:text-slate-900 font-bold text-xs border border-slate-300 rounded-lg px-2 py-1">🌐 <span data-i18n="lang_short">BM</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: HUB PILIH PERMAINAN ============ -->
+<div id="screen-hub" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-3xl">
+    <div class="flex items-center justify-between mb-5">
+      <button onclick="showScreen('screen-start')" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="menu">Menu</span></button>
+      <h2 class="display text-2xl font-extrabold text-emerald-700" data-i18n="choose_game">🎮 Pilih Permainan</h2>
+      <span class="font-bold text-amber-500"><i class="fa-solid fa-coins"></i> <span id="hubCoins">0</span></span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <button onclick="goLevels()" class="btn-press text-left p-5 rounded-3xl bg-gradient-to-br from-emerald-400 to-green-500 text-white shadow-lg">
+        <div class="text-4xl mb-1">🗺️</div><h3 class="display text-xl font-extrabold" data-i18n="explore_t">Teroka & Kuiz</h3><p class="text-xs text-white/90 mt-1" data-i18n="explore_d">Jelajah hutan, jejaki haiwan &amp; tumbuhan, jawab kuiz untuk kumpul cop.</p></button>
+      <button onclick="startGuess()" class="btn-press text-left p-5 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg">
+        <div class="text-4xl mb-1">🔍</div><h3 class="display text-xl font-extrabold" data-i18n="guess_t">Teka Siapa Saya?</h3><p class="text-xs text-white/90 mt-1" data-i18n="guess_d">Lihat sebahagian gambar, taip nama haiwan/tumbuhan yang betul!</p></button>
+      <button onclick="startListen()" class="btn-press text-left p-5 rounded-3xl bg-gradient-to-br from-sky-400 to-blue-500 text-white shadow-lg">
+        <div class="text-4xl mb-1">🔊</div><h3 class="display text-xl font-extrabold" data-i18n="listen_t">Dengar Bunyi</h3><p class="text-xs text-white/90 mt-1" data-i18n="listen_d">Dengar bunyi haiwan, teka haiwan yang betul antara pilihan.</p></button>
+      <button onclick="openCollection()" class="btn-press text-left p-5 rounded-3xl bg-gradient-to-br from-violet-400 to-purple-500 text-white shadow-lg">
+        <div class="text-4xl mb-1">📖</div><h3 class="display text-xl font-extrabold" data-i18n="book_t">Buku Koleksi</h3><p class="text-xs text-white/90 mt-1" data-i18n="book_d">Lihat semua cop haiwan, tumbuhan &amp; babak yang telah dikumpul.</p></button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: PILIH LEVEL ============ -->
+<div id="screen-levels" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-3xl">
+    <div class="flex items-center justify-between mb-4">
+      <button onclick="showScreen('screen-start')" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="menu">Menu</span></button>
+      <h2 class="display text-2xl font-extrabold text-emerald-700" data-i18n="levels_title">🗺️ Pilih Misi</h2>
+      <span class="font-bold text-amber-500"><i class="fa-solid fa-coins"></i> <span id="levelCoins">0</span></span>
+    </div>
+    <div id="rankBar" class="card rounded-2xl p-3 mb-4 flex items-center gap-3"></div>
+    <div id="levelGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: KEDAI ============ -->
+<div id="screen-store" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-3xl">
+    <div class="flex items-center justify-between mb-4">
+      <button onclick="backFromSub()" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="back">Kembali</span></button>
+      <h2 class="display text-2xl font-extrabold text-amber-600" data-i18n="store_title">🛍️ Kedai Ranger</h2>
+      <span class="font-bold text-amber-500"><i class="fa-solid fa-coins"></i> <span id="storeCoins">0</span></span>
+    </div>
+    <div class="card rounded-3xl p-4 mb-4 flex items-center gap-4">
+      <div id="storePreview" class="shrink-0"></div>
+      <div>
+        <p class="display font-extrabold text-slate-800" data-i18n="ranger_you">Ranger Anda</p>
+        <p class="text-xs text-slate-500 leading-relaxed" data-i18n-html="store_desc">Lengkapkan slot: <b>Karakter</b>, <b>Topi</b>, <b>Gajet</b> & <b>Haiwan Peliharaan</b>. Item <span class="text-amber-600 font-bold">RARE</span> & <span class="text-rose-600 font-bold">KHAS</span> (ganjaran tamat misi) menanti!</p>
+      </div>
+    </div>
+    <div id="storeTabs" class="flex flex-wrap gap-2 mb-4"></div>
+    <div id="storeGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: PENCAPAIAN ============ -->
+<div id="screen-ach" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-2xl">
+    <div class="flex items-center justify-between mb-4">
+      <button onclick="showScreen('screen-start')" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="menu">Menu</span></button>
+      <h2 class="display text-2xl font-extrabold text-sky-600" data-i18n="ach_title">🏅 Pencapaian</h2>
+      <span></span>
+    </div>
+    <div id="achGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: PERMAINAN ============ -->
+<div id="screen-game" class="screen flex-col items-center p-2 md:p-4 w-full">
+  <div id="gameInner" class="w-full max-w-5xl flex flex-col">
+    <!-- App bar -->
+    <div id="gameAppbar" class="card rounded-2xl px-3 py-2 mb-2 flex items-center justify-between gap-2 shrink-0">
+      <button onclick="quitToLevels()" class="btn-press w-9 h-9 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="flex-1 min-w-0 text-center">
+        <p id="hudZone" class="display font-extrabold text-emerald-700 leading-none truncate">LOKASI</p>
+        <p id="hudObjective" class="text-[11px] text-amber-600 font-bold truncate">Objektif</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="hidden sm:flex items-center gap-1.5 text-sm font-bold text-emerald-600" id="hudRank">🌱</span>
+        <span class="flex items-center gap-1 text-sm font-bold text-amber-500"><i class="fa-solid fa-coins"></i> <span id="hudCoins">0</span></span>
+        <button onclick="toggleMute()" id="muteBtn2" class="btn-press w-9 h-9 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center"><i class="fa-solid fa-volume-high"></i></button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="mapWrap" class="relative w-full overflow-hidden rounded-[1.6rem] shadow-2xl ring-4 ring-white/70" style="aspect-ratio:900/560;">
+      <canvas id="gameCanvas"></canvas>
+      <!-- vignet halus utk kedalaman -->
+      <div class="absolute inset-0 pointer-events-none rounded-[1.6rem]" style="box-shadow:inset 0 0 70px 4px rgba(6,40,25,.22); z-index:1;"></div>
+
+      <!-- Objektif chip (kiri atas) -->
+      <div class="absolute top-3 left-3 bg-white/90 backdrop-blur rounded-2xl px-3 py-2 shadow-lg flex items-center gap-2 max-w-[60%]">
+        <div id="targetThumb" class="w-9 h-9 rounded-xl bg-emerald-100 overflow-hidden flex items-center justify-center text-lg shrink-0">🎯</div>
+        <div class="leading-tight min-w-0">
+          <p id="targetName" class="text-[12px] font-extrabold text-slate-800 truncate">—</p>
+          <p id="targetDir" class="text-[11px] text-amber-600 font-bold truncate">—</p>
+        </div>
+      </div>
+
+      <!-- Minimap (kanan atas) -->
+      <div class="absolute top-3 right-3 bg-white/85 backdrop-blur rounded-xl p-1 shadow-lg">
+        <canvas id="miniMap" width="150" height="108" class="rounded-lg block" style="width:120px;height:86px;"></canvas>
+      </div>
+
+      <!-- Cop (kiri atas, bawah objektif) -->
+      <div id="stampRow" class="absolute top-[4.6rem] left-3 flex gap-1.5 z-10"></div>
+
+      <!-- Alert (bawah kiri, beri ruang utk pad) -->
+      <div id="clueAlert" class="absolute bottom-3 left-3 right-44 max-w-md bg-white/92 backdrop-blur rounded-2xl px-4 py-2.5 shadow-xl flex items-center justify-between gap-3 transition-all opacity-0 translate-y-6 pointer-events-none z-20">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="flex h-2.5 w-2.5 relative shrink-0"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span></span>
+          <p id="clueAlertText" class="text-[12px] text-slate-700 font-semibold truncate"></p>
+        </div>
+        <button id="btnAction" class="hidden btn-press px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl whitespace-nowrap pointer-events-auto"><i class="fa-solid fa-triangle-exclamation"></i> <span data-i18n="investigate">Siasat</span></button>
+      </div>
+
+      <!-- Tukar mod kawalan -->
+      <button onclick="toggleCtrl()" id="ctrlToggle" class="absolute bottom-3 left-3 z-30 px-3 py-2 rounded-2xl bg-white/80 backdrop-blur text-emerald-600 text-xs font-bold shadow btn-press">🎮 Pad</button>
+
+      <!-- Pad gerak DALAM peta (kanan bawah) -->
+      <div id="dpadCtrl" class="absolute bottom-3 right-3 z-30 flex items-end gap-1.5 select-none">
+        <button id="ctrl-left" class="dpad"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="flex flex-col gap-1.5">
+          <button id="ctrl-up" class="dpad"><i class="fa-solid fa-arrow-up"></i></button>
+          <button id="ctrl-down" class="dpad"><i class="fa-solid fa-arrow-down"></i></button>
+        </div>
+        <button id="ctrl-right" class="dpad"><i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+
+      <!-- Joystick DALAM peta (bawah tengah) -->
+      <div id="joyCtrl" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 hidden select-none touch-none">
+        <div id="joyBase" class="relative rounded-full bg-white/45 backdrop-blur border-2 border-white/70 shadow-lg" style="width:120px;height:120px;">
+          <div id="joyKnob" class="absolute rounded-full sheen shadow-md" style="width:54px;height:54px;left:33px;top:33px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: TEKA SIAPA SAYA ============ -->
+<div id="screen-guess" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-md">
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="quitGame()" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="exit">Keluar</span></button>
+      <h2 class="display text-xl font-extrabold text-amber-600" data-i18n="guess_title">🔍 Teka Siapa Saya</h2>
+      <span class="text-xs font-bold text-slate-500" id="guessProg">1/5</span>
+    </div>
+    <div class="flex justify-between items-center mb-2 text-sm font-bold">
+      <span class="text-emerald-600">⭐ Level <span id="guessLvlNum">1</span></span>
+      <span class="text-rose-500" id="guessLives">❤️❤️❤️</span>
+      <span class="text-amber-500">⭐ <span id="guessScore">0</span></span>
+    </div>
+    <div id="guessRoadmap" class="flex items-center justify-center gap-2 mb-2 text-xs"></div>
+    <div class="card rounded-3xl p-4">
+      <div id="guessImgBox" class="w-full h-56 rounded-2xl overflow-hidden bg-slate-100 mb-3 relative">
+        <img id="guessImg" class="absolute" style="will-change:transform" src="" alt="">
+        <div id="guessMystery" class="hidden absolute top-2 left-2 z-10 bg-amber-400 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-full shadow-lg">🌟 Misteri</div>
+      </div>
+      <div id="guessHintBox" class="text-center text-sm text-slate-600 mb-2 min-h-[20px] font-semibold"></div>
+      <input id="guessInput" type="text" autocomplete="off" placeholder="Taip nama di sini..." data-i18n-ph="type_here" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-200 focus:border-emerald-400 outline-none text-center font-bold text-slate-800 mb-2">
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="guessHint()" class="btn-press py-3 bg-sky-100 text-sky-600 font-bold rounded-2xl text-sm"><i class="fa-solid fa-lightbulb"></i> <span data-i18n="hint">Petunjuk</span></button>
+        <button onclick="submitGuess()" class="btn-press py-3 sheen text-white font-bold rounded-2xl text-sm" data-i18n="send">Hantar ✓</button>
+      </div>
+      <button onclick="guessShowOptions()" class="w-full mt-2 text-xs text-slate-400 hover:text-slate-600 font-semibold underline" data-i18n="show_options">Tak pasti? Tunjuk pilihan</button>
+      <div id="guessOptions" class="grid grid-cols-2 gap-2 mt-2"></div>
+      <div id="guessFeedback" class="mt-2 text-center font-bold hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: DENGAR BUNYI ============ -->
+<div id="screen-listen" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-md">
+    <div class="flex items-center justify-between mb-3">
+      <button onclick="quitGame()" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="exit">Keluar</span></button>
+      <h2 class="display text-xl font-extrabold text-sky-600" data-i18n="listen_title">🔊 Dengar Bunyi</h2>
+      <span class="text-xs font-bold text-slate-500" id="listenProg">1/5</span>
+    </div>
+    <div class="flex justify-between items-center mb-2 text-sm font-bold">
+      <span class="text-emerald-600">⭐ Level <span id="listenLvlNum">1</span></span>
+      <span class="text-rose-500" id="listenLives">❤️❤️❤️</span>
+      <span class="text-amber-500">⭐ <span id="listenScore">0</span></span>
+    </div>
+    <div id="listenRoadmap" class="flex items-center justify-center gap-2 mb-2 text-xs"></div>
+    <div class="card rounded-3xl p-5 text-center">
+      <p id="listenPrompt" class="text-sm text-slate-500 mb-3 font-semibold" data-i18n="sound_q">Bunyi apakah ini? Tekan untuk dengar.</p>
+      <button onclick="playListen()" class="btn-press w-28 h-28 rounded-full sheen text-white text-5xl shadow-lg mx-auto flex items-center justify-center mb-4"><i class="fa-solid fa-volume-high"></i></button>
+      <div id="listenOptions" class="grid grid-cols-2 gap-3"></div>
+      <div id="listenFeedback" class="mt-3 text-center font-bold hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SKRIN: BUKU KOLEKSI ============ -->
+<div id="screen-collection" class="screen fixed inset-0 z-40 flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+  <div class="w-full max-w-3xl">
+    <div class="flex items-center justify-between mb-4">
+      <button onclick="backFromSub()" class="btn-press text-slate-500 hover:text-slate-800 font-bold"><i class="fa-solid fa-arrow-left mr-1"></i> <span data-i18n="back">Kembali</span></button>
+      <h2 class="display text-2xl font-extrabold text-violet-600" data-i18n="coll_title">📖 Buku Koleksi</h2>
+      <span class="text-xs font-bold text-slate-500" id="colCount">0</span>
+    </div>
+    <div id="colTabs" class="flex flex-wrap gap-2 mb-3"></div>
+    <div id="colRegions" class="flex flex-wrap gap-2 mb-4"></div>
+    <div id="colGrid" class="grid grid-cols-3 sm:grid-cols-4 gap-3"></div>
+  </div>
+</div>
+
+<!-- ============ MODAL: BUTIRAN KOLEKSI ============ -->
+<div id="detailModal" class="fixed inset-0 bg-violet-950/40 backdrop-blur-sm hidden items-center justify-center p-3 z-50">
+  <div class="relative bg-white rounded-[1.8rem] shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col pop">
+    <button onclick="closeDetail()" class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-white/90 shadow text-slate-600 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+    <div id="detailBody" class="overflow-y-auto"></div>
+  </div>
+</div>
+
+<!-- ============ MODAL: TUTORIAL / ONBOARDING ============ -->
+<div id="tutModal" class="fixed inset-0 bg-emerald-950/50 backdrop-blur-sm hidden items-center justify-center p-4 z-[55]">
+  <div class="bg-white rounded-[1.8rem] shadow-2xl w-full max-w-sm p-6 text-center pop">
+    <div id="tutIcon" class="text-6xl mb-2 floaty">👋</div>
+    <h3 id="tutTitle" class="display text-xl font-extrabold text-emerald-700 mb-1">Selamat Datang</h3>
+    <p id="tutText" class="text-sm text-slate-600 leading-relaxed mb-3 min-h-[64px]"></p>
+    <div id="tutDots" class="flex justify-center gap-1.5 mb-4"></div>
+    <div class="flex gap-2">
+      <button onclick="tutSkip()" class="btn-press flex-1 py-3 bg-slate-100 text-slate-500 font-bold rounded-2xl text-sm" data-i18n="skip">Langkau</button>
+      <button onclick="tutNext()" id="tutNextBtn" class="btn-press flex-1 py-3 sheen text-white font-bold rounded-2xl text-sm">Seterusnya →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: SPESIES ============ -->
+<div id="speciesModal" class="fixed inset-0 bg-emerald-950/40 backdrop-blur-sm hidden items-center justify-center p-3 z-50">
+  <div class="relative bg-white rounded-[1.8rem] shadow-2xl w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col pop">
+    <button onclick="closeSpecies()" class="absolute top-3 right-3 z-20 w-9 h-9 rounded-full bg-white/90 shadow text-slate-600 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+    <div id="spHeader" class="relative">
+      <div class="h-44 overflow-hidden"><div class="imgwrap"><span id="spFallback" class="imgfallback">🐾</span><img id="spImg" src="" alt=""></div></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent"></div>
+      <div class="absolute bottom-3 left-4 right-4">
+        <span id="spStatus" class="text-[10px] font-bold px-2 py-0.5 bg-rose-500 text-white rounded-full uppercase tracking-wide">—</span>
+        <h2 id="spName" class="display text-2xl font-extrabold text-white leading-tight mt-1">—</h2>
+        <p id="spSci" class="text-[11px] italic text-white/80">—</p>
+      </div>
+    </div>
+    <!-- BELAJAR -->
+    <div id="studyView" class="overflow-y-auto p-4 flex-1">
+      <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-book-open text-emerald-500"></i>
+        <p class="text-[12px] font-bold text-emerald-700" data-i18n="study_note">Kaji ciri-ciri dahulu — maklumat ini disembunyikan semasa kuiz!</p>
+      </div>
+      <div id="spInfo" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm"></div>
+      <button onclick="startQuiz()" class="btn-press w-full mt-4 py-3.5 bg-gradient-to-r from-amber-400 to-amber-500 text-white display font-bold rounded-2xl shadow-md text-base" data-i18n="mula_kuiz">SAYA DAH FAHAM — MULA KUIZ ▶</button>
+    </div>
+    <!-- KUIZ -->
+    <div id="quizView" class="hidden overflow-y-auto p-4 flex-1">
+      <div class="flex justify-between items-center mb-3 pr-9">
+        <span id="qKind" class="text-xs font-bold text-amber-600 uppercase tracking-wide"><i class="fa-solid fa-brain"></i> Kuiz</span>
+        <div class="flex items-center gap-2">
+          <span id="comboPill" class="hidden text-[11px] font-extrabold text-orange-500 bg-orange-100 px-2 py-0.5 rounded-full">🔥 Combo x2</span>
+          <div class="bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-500"><span data-i18n="q_label">Soalan</span> <span id="qNum" class="text-emerald-600">1</span>/3</div>
+        </div>
+      </div>
+      <div class="flex gap-1 mb-3" id="qDots"></div>
+      <div class="bg-slate-50 border border-slate-200 p-4 rounded-2xl mb-3 min-h-[60px] flex items-center"><p id="qText" class="text-base text-slate-800 font-bold leading-snug">—</p></div>
+      <div id="qOptions" class="grid gap-2"></div>
+      <div id="quizResult" class="mt-4 p-4 rounded-2xl hidden text-center text-sm font-semibold leading-relaxed"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: BABAK ============ -->
+<div id="sceneModal" class="fixed inset-0 bg-rose-950/40 backdrop-blur-sm hidden items-center justify-center p-3 z-50">
+  <div class="bg-white rounded-[1.8rem] shadow-2xl w-full max-w-lg max-h-[92vh] overflow-hidden flex flex-col pop">
+    <div id="scBanner" class="p-5 text-center text-white" style="background:linear-gradient(135deg,#f97316,#ef4444)">
+      <div id="scIcon" class="text-5xl mb-1">🔥</div>
+      <h2 id="scTitle" class="display text-2xl font-extrabold">—</h2>
+    </div>
+    <div class="p-5 overflow-y-auto">
+      <p id="scSituation" class="text-sm text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-2xl border border-slate-200 mb-3"></p>
+      <div id="scNumberBox" class="bg-amber-50 border border-amber-300 rounded-2xl p-3 mb-3 text-center hidden">
+        <p class="text-[11px] text-amber-600 font-bold uppercase tracking-wide mb-0.5"><i class="fa-solid fa-phone"></i> <span data-i18n="emergency_line">Talian Kecemasan</span></p>
+        <p id="scNumber" class="text-xl font-extrabold text-slate-800 tracking-wide">—</p>
+      </div>
+      <p id="scQuestion" class="text-sm text-slate-800 font-bold mb-2">Apakah tindakan terbaik?</p>
+      <div id="scOptions" class="grid gap-2"></div>
+      <div id="scFeedback" class="mt-3 p-3 rounded-2xl hidden text-center text-sm font-semibold"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: KEMENANGAN ============ -->
+<div id="winModal" class="fixed inset-0 bg-emerald-950/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-[1.8rem] shadow-2xl w-full max-w-sm p-7 text-center pop">
+    <div id="winEmoji" class="text-7xl mb-1 floaty">🏆</div>
+    <h2 id="winTitle" class="display text-3xl font-extrabold bg-clip-text text-transparent sheen">Misi Selesai!</h2>
+    <div id="winStars" class="text-3xl my-2">⭐⭐⭐</div>
+    <p id="winText" class="text-slate-600 text-sm mb-4 leading-relaxed"></p>
+    <div class="grid grid-cols-3 gap-2 mb-5 text-center">
+      <div class="bg-emerald-50 rounded-2xl py-2"><p id="winL1" class="text-[10px] text-slate-500 uppercase font-bold">Cop</p><p id="winStamps" class="text-emerald-600 font-extrabold text-lg">0</p></div>
+      <div class="bg-amber-50 rounded-2xl py-2"><p id="winL2" class="text-[10px] text-slate-500 uppercase font-bold">Syiling</p><p id="winCoins" class="text-amber-500 font-extrabold text-lg">0</p></div>
+      <div class="bg-sky-50 rounded-2xl py-2"><p id="winL3" class="text-[10px] text-slate-500 uppercase font-bold">XP</p><p id="winXp" class="text-sky-500 font-extrabold text-lg">0</p></div>
+    </div>
+    <div id="winButtons" class="flex flex-col gap-2"></div>
+  </div>
+</div>
+
+<!-- ============ MODAL: CARA MAIN ============ -->
+<div id="helpModal" class="fixed inset-0 bg-emerald-950/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-[1.8rem] shadow-2xl w-full max-w-md p-6 pop">
+    <div class="flex justify-between items-center mb-3"><h2 class="display text-2xl font-extrabold text-emerald-700" data-i18n="help_title">📖 Cara Main</h2><button onclick="closeHelp()" class="w-9 h-9 rounded-full bg-slate-100 text-slate-500"><i class="fa-solid fa-xmark"></i></button></div>
+    <ul class="text-sm text-slate-700 space-y-3 leading-relaxed">
+      <li data-i18n-html="help_1">🕹️ <b>Gerak</b> dengan <b>WASD</b> / anak panah / pad sentuh.</li>
+      <li data-i18n-html="help_2">🧭 Ikut <b>petunjuk arah</b> & <b>peta mini</b> (kanan atas) cari haiwan/tumbuhan. Haiwan air ada di tasik, haiwan darat di kawasan habitatnya!</li>
+      <li data-i18n-html="help_3">📚 Bila jumpa, <b>kaji ciri-cirinya</b> — kemudian kuiz <b>menyembunyikan</b> maklumat itu.</li>
+      <li data-i18n-html="help_4">🧠 Jawab kuiz (aneka jenis: pilihan, Betul/Salah, kenal gambar). Betul <b>2/3</b> untuk dapat <b>cop</b>. Jawab berturut-turut = <b>combo</b> & bonus!</li>
+      <li data-i18n-html="help_5">🚨 Selamatkan krisis: panggil <b>bomba/polis</b> dengan tindakan & nombor betul — tonton mereka menyelamat!</li>
+      <li data-i18n-html="help_6">🏅 Naik <b>pangkat</b>, kumpul <b>pencapaian</b> & <b>bintang</b>. Masuk <b>portal</b> ke misi seterusnya.</li>
+    </ul>
+    <button onclick="closeHelp()" class="btn-press w-full mt-5 py-3 sheen text-white display font-bold rounded-2xl" data-i18n="understood">Faham!</button>
+  </div>
+</div>
+
+
+</body>
+</html>
